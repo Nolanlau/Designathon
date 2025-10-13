@@ -63,10 +63,23 @@ trail_steps = max(1, round(trail_length_seconds / dt));
 
 %% --- Prepare target axes (no new figure) ---
 cla(ax);
-hold(ax,'on'); box(ax,'on');
+ title(ax, '');   % Removes the title
+    ax.Box = 'on';            % Draw box around the plot area
+    ax.XColor = 'k';          % Set x-axis line color
+    ax.YColor = 'k';          % Set y-axis line color
+    ax.LineWidth = 0.5;       % Axis line thickness
+ax.XColor = 'k';
+ax.YColor = 'k';
+ax.Color = [1 1 1];         % White background
+ax.FontName = 'Helvetica';  % Use Helvetica for labels and ticks
+hold(ax,'on');
+box(ax,'on');
+
 axis(ax,'equal');
 xlim(ax,[-Lx/2 Lx/2]); ylim(ax,[-Ly/2 Ly/2]);
-xlabel(ax,'x'); ylabel(ax,'y');
+xlabel(ax, 'x', 'FontName', 'Helvetica', 'Rotation', 0);
+yl = ylabel(ax, 'y', 'FontName', 'Helvetica');
+yl.Rotation = 0;  ax.FontName = 'Helvetica';
 
 density = 2;
 hs = streamslice(ax, XX, YY, u, v, density, 'cubic');
