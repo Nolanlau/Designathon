@@ -8,7 +8,7 @@ end
 
 %% --- User parameters ---
 
-animation_delay = 0.05/5;
+animation_delay = 0.05/15;
 remove_particles_on_exit = true;
 
 %% --- Domain and base flow ---
