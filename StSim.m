@@ -1,15 +1,14 @@
-function StSim(ax)
-% StSim  Animate inertial particles in a 2-D vortex field on the given axes.
-% Usage in App Designer:  StSim(app.UIAxes)
+function StSim(ax, St)
 
-%% --- Validate target axes ---
+
+
 if ~(isa(ax,'matlab.ui.control.UIAxes') || isa(ax,'matlab.graphics.axis.Axes')) || ~isvalid(ax)
     error('StSim:BadAxes','First input must be a valid UIAxes/Axes handle.');
 end
 
 %% --- User parameters ---
-St=6
-animation_delay = 0.05;
+
+animation_delay = 0.05/5;
 remove_particles_on_exit = true;
 
 %% --- Domain and base flow ---
@@ -71,6 +70,7 @@ xlabel(ax,'x'); ylabel(ax,'y');
 
 density = 2;
 hs = streamslice(ax, XX, YY, u, v, density, 'cubic');
+
 for h = hs(:).'
     try
         set(h, 'Color', [0.5 0.5 0.5], 'LineWidth', 0.9);
@@ -143,23 +143,41 @@ for n = 1:nsteps-1
     if trail_idx > trail_steps, trail_idx = 1; end
 
     if mod(n, steps_per_frame) == 0
-        idxs = mod((trail_idx:trail_idx+trail_steps-1)-1, trail_steps) + 1;
-        for i = 1:Np
-            tx = trail_x(i, idxs); ty = trail_y(i, idxs);
-            valid = ~isnan(tx);
-            if any(valid)
-                set(particle_lines(i),   'XData', tx(valid), 'YData', ty(valid));
-            else
-                set(particle_lines(i),   'XData', NaN, 'YData', NaN);
-            end
-            if active(i)
-                set(particle_markers(i), 'XData', xp(i), 'YData', yp(i));
-            else
-                set(particle_markers(i), 'XData', NaN, 'YData', NaN);
-            end
+    % Skip updates if axes were deleted (user changed tab, closed figure, etc.)
+    if ~isvalid(ax)
+        return
+    end
+
+    idxs = mod((trail_idx:trail_idx+trail_steps-1)-1, trail_steps) + 1;
+    for i = 1:Np
+        % If line object is invalid (deleted by cla or otherwise), recreate it
+        if ~isvalid(particle_lines(i))
+            particle_lines(i) = plot(ax, NaN, NaN, '-', 'LineWidth', 1.5, 'Color', 'r');
         end
+        if ~isvalid(particle_markers(i))
+            particle_markers(i) = plot(ax, NaN, NaN, 'o', 'MarkerFaceColor', 'w', ...
+                                       'MarkerEdgeColor', 'k', 'MarkerSize', 6);
+        end
+
+        tx = trail_x(i, idxs); ty = trail_y(i, idxs);
+        valid = ~isnan(tx);
+        if any(valid)
+            set(particle_lines(i), 'XData', tx(valid), 'YData', ty(valid));
+        else
+            set(particle_lines(i), 'XData', NaN, 'YData', NaN);
+        end
+        if active(i)
+            set(particle_markers(i), 'XData', xp(i), 'YData', yp(i));
+        else
+            set(particle_markers(i), 'XData', NaN, 'YData', NaN);
+        end
+    end
+    drawnow limitrate nocallbacks;
+    pause(animation_delay);
+end
+
         drawnow limitrate;
         pause(animation_delay);
     end
 end
-end
+
