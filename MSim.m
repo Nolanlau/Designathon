@@ -1,11 +1,5 @@
 function  MSim(Minf, ax)
-%MSim  Run the boundary-layer style MacCormack routine and plot Mach on given axes
-%   data = MSim(Minf, ax)
-%   Minf : inflow Mach number (scalar)
-%   ax   : axes or uiaxes handle where plot will be drawn
-%   data : struct with fields x,y,u,v,p,T,delta,Ma (useful for further inspection)
 
-% Physical constants (local)
 global mu0 T0 gm Pr R
 mu0 = 1.7894e-05;    % Pa s (sea level dynamic viscosity)
 T0   = 288.16;       % K

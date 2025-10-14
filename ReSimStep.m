@@ -107,7 +107,7 @@ switch lower(mode)
         xlabel(axHeat, 'x'); ylabel(axHeat, 'y','Rotation',0);
         xlim(axHeat, [0 data.xe]); ylim(axHeat, [0 data.ye]);
         pbaspect(axHeat, [1 1 1]);
-        colormap(axHeat, 'jet');
+        colormap(axHeat, 'parula');
         caxis(axHeat, [min(Z(:)) max(Z(:))]);
         cb = colorbar(axHeat);
         cb.Label.String = cbarLabel;

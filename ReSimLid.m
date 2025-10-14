@@ -8,8 +8,8 @@ switch lower(string(mode))
     case 'compute'
         Re = arg2;
         % Optional parameters with conservative defaults
-        if nargin >= 3 && ~isempty(arg3), nx = arg3; else nx = 32; end
-        if nargin >= 4 && ~isempty(arg4), ny = arg4; else ny = 32; end
+        if nargin >= 3 && ~isempty(arg3), nx = arg3; else nx = 20; end
+        if nargin >= 4 && ~isempty(arg4), ny = arg4; else ny = 20; end
         if nargin >= 5 && ~isempty(arg5), xe = arg5; else xe = 1.0; end
         if numel(varargin) >= 1 && ~isempty(varargin{1}), ye = varargin{1}; else ye = 1.0; end
         if numel(varargin) >= 2 && ~isempty(varargin{2}), Utop = varargin{2}; else Utop = 1.0; end
@@ -149,7 +149,7 @@ switch lower(string(mode))
         end
 
 
-        colormap(axContour,'jet');
+        colormap(axContour,'parula');
         if all(isfinite(plotData(:)))
             caxis(axContour,[min(plotData(:)), max(plotData(:))]);
         end
