@@ -1,18 +1,4 @@
 function out = ReSimLid(mode, arg2, arg3, arg4, arg5, varargin)
-% NewReSim_external  Two mode helper for App Designer
-% Usage:
-%   data = NewReSim_external('compute', Re, nx, ny, xe, ye, Utop, endTime)
-%       Runs the solver once and returns a struct 'data' containing grids
-%       and fields required for plotting.
-%
-%   NewReSim_external('plot', data, plotChoice, axContour, axStream)
-%       Plots from the supplied data struct without recomputing.
-%
-% Notes:
-%   Viscosity chosen as mu = rho * Utop * L / Re.
-%   The function expects helper routines on path:
-%     boundaryConditions, intermediateVelocity, pressureSolve, accel,
-%     calcDiv, maxDiv
 
 if nargin < 2
     error('NewReSim_external:Insufficient arguments.');
@@ -125,11 +111,11 @@ switch lower(string(mode))
             case 'pressure'
                 plotData = P; cbLabel = 'Pressure';
             case 'horizontal velocity'
-                plotData = U; cbLabel = 'Horizontal velocity';
+                plotData = U; cbLabel = 'Horizontal Velocity';
             case 'vertical velocity'
-                plotData = V; cbLabel = 'Vertical velocity';
-            case 'total velocity'
-                plotData = velMag; cbLabel = 'Velocity magnitude';
+                plotData = V; cbLabel = 'Vertical Velocity';
+            case 'absolute velocity'
+                plotData = velMag; cbLabel = 'Absolute Velocity';
             otherwise
                 plotData = U; cbLabel = 'Horizontal velocity';
         end
