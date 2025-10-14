@@ -1,75 +1,100 @@
-clear all; close all; clc
+function  MSim(Minf, ax)
+%MSim  Run the boundary-layer style MacCormack routine and plot Mach on given axes
+%   data = MSim(Minf, ax)
+%   Minf : inflow Mach number (scalar)
+%   ax   : axes or uiaxes handle where plot will be drawn
+%   data : struct with fields x,y,u,v,p,T,delta,Ma (useful for further inspection)
 
-
-Minf = 3; % 0.5 to 5
-
-
-%% Constants for gas properties (must be defined first)
+% Physical constants (local)
 global mu0 T0 gm Pr R
-mu0 = 0.000017894; % [double] Pa, Sea Level Dynamic Viscosity
-T0 = 288.16; % [double] Kelvin, Sea Level Temperature
-gm = 1.4;  % [double] ratio of specific heats
-Pr = 0.71; % [double] Prandtl number
-R = 287;   % [double] J/(kg K), Specific gas constant
+mu0 = 1.7894e-05;    % Pa s (sea level dynamic viscosity)
+T0   = 288.16;       % K
+gm   = 1.4;          % gamma
+Pr   = 0.71;         % Prandtl
+R    = 287;          % J/(kg K)
 
-% Plate length
-lhori = 0.00001; % m
-
-% Courant number
-K = 0.8;
-
-% grid size and max iterations
-nx = 70;
-ny = 70; 
+% Problem geometry and numerics (adopted from your script)
+lhori   = 1.0e-5;    % plate length [m]
+K       = 0.8;       % Courant number
+nx      = 70;
+ny      = 70;
 maxiter = 1000;
 
-% Inflow conditions
-
-pinf = 101325; % Pa
-Tinf = 288.16; % Kelvin
+% Inflow primitives (velocity set by Mach)
+pinf = 101325;         % Pa
+Tinf = 288.16;         % K
+% Create inflow primitive state (assumes Primitives accepts u,v,p,T)
 inflow = Primitives(0,0,pinf,Tinf);
-inflow.u = Minf*getSoundSpeed(Tinf); % m/s
-[Reinf,~] = calculateReynoldsNumber(inflow.u,inflow.v,inflow.p,inflow.T,lhori);
+% set axial velocity from supplied Mach using local sound speed
+a_inf = sqrt(gm * R * Tinf);          % a = sqrt(gamma R T)
+inflow.u = Minf * a_inf;              % U = M * a
 
-% boundary layer size & vertical domain size
-delta = 5*lhori/sqrt(Reinf(1,1));
-lvert = 5*delta;
+% Reynolds number estimate (calls user function)
+try
+    [Reinf, ~] = calculateReynoldsNumber(inflow.u, inflow.v, inflow.p, inflow.T, lhori);
+catch
+    % Fallback: assume ideal gas, compute rho = p/(R T), mu = mu0 (approx)
+    rho_inf = pinf / (R * Tinf);
+    Reinf = rho_inf * inflow.u * lhori / mu0;
+    Reinf = Reinf; % keep scalar
+end
 
-% grid
-[x,y] = meshgrid(linspace(0,lhori,nx),linspace(0,lvert,ny));
+% boundary layer scale and vertical domain size
+delta = 5 * lhori / sqrt(Reinf);  % as in your script
+lvert  = 5 * delta;
 
-%% Set initial conditions
-% Set all intial values to inflow values. Conditions on boundaries updated
-% by solveMacCormack().
-primitives = Primitives(inflow.u*ones(ny,nx),...
-                        inflow.v*ones(ny,nx),...
-                        inflow.p*ones(ny,nx),...
-                        inflow.T*ones(ny,nx));
+% grid (x,y)
+[x, y] = meshgrid(linspace(0, lhori, nx), linspace(0, lvert, ny));
 
-%% Solve two wall temperature conditions
+% initial condition array of primitives set to inflow
+primitives = Primitives(inflow.u * ones(ny, nx), ...
+                        inflow.v * ones(ny, nx), ...
+                        inflow.p * ones(ny, nx), ...
+                        inflow.T * ones(ny, nx));
 
-Tw_Tinf =  1.0; % constant wall temperature
-constantTw = solveMacCormack(primitives,inflow,Tw_Tinf,K,x,y,maxiter);
+% Run solver for adiabatic wall (Tw_Tinf = -1 indicates adiabatic in your script)
+Tw_Tinf = -1.0;
+adiabaticSol = solveMacCormack(primitives, inflow, Tw_Tinf, K, x, y, maxiter);
 
-Tw_Tinf = -1.0; % adiabatic
-adiabaticTw = solveMacCormack(primitives,inflow,Tw_Tinf,K,x,y,maxiter);
+% Extract fields
+[u, v, p, T] = dealPrimitives(adiabaticSol);
 
-%% Bonus Plot
-figure(7)
-colormap('jet')
+% Compute local sound speed array. Prefer getSoundSpeed if present.
+if exist('getSoundSpeed', 'file') == 2
+    a = getSoundSpeed(T);
+else
+    a = sqrt(gm * R .* T);
+end
 
-contourLevels = 500; % increase this number for smoother contours
-[u,v,p,T] = dealPrimitives(adiabaticTw);
-a = getSoundSpeed(T);
-contourf(x./delta,y./delta,sqrt(u.^2+v.^2)./a,contourLevels, 'LineStyle', 'none')
-box on
-xlabel('x')
-ylabel('y')
-pbaspect([1 1 1])
-cb = colorbar;
-cb.Label.String = 'M'; % label for colour bar
+% Compute Mach magnitude field
+Umag = sqrt(u.^2 + v.^2);
+MachField = Umag ./ a;
 
-view(0,90)
+% Plot to provided axes
+contourLevels = 200; % adjust as required
+cla(ax);
+hold(ax, 'on');
+
+% Use contourf with the axes as first argument
+contourf(ax, x./delta, y./delta, MachField, contourLevels, 'LineStyle', 'none');
+
+% Axes and plot configuration
+colormap(ax, 'parula');
+cb = colorbar(ax);
+cb.Label.String = 'Mach Number';
+xlabel(ax, 'x ');
+ylabel(ax, 'y ', 'Rotation', 0);
+box(ax, 'on');
+pbaspect(ax, [1 1 1]);
+view(ax, 2); % top view equivalent to view(0,90)
+set(ax, 'FontName', 'Helvetica');
+
+hold(ax, 'off');
+
+
+
+end
+
 
 
 
