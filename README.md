@@ -7,5 +7,5 @@ By these presents, We have devised a proto-type of software most ingenious from 
 
 [2] Ricciardi A.. AndersonCFD_Chapter10_Solution (version 1.0) [Internet]. 2021 [cited 2025 Oct 13]. Available from: https://uk.mathworks.com/matlabcentral/fileexchange/95203-andersoncfd_chapter10_solution
 
-[3] Lau NCK, Klettner CA. Vorticity generation, transport, and annihilation under steep solitary waves. Physics of Fluids. 2025 Sept 24;37(9):097173. 
+[3] Lau NCK, Klettner CA. Vorticity generation, transport, and annihilation under steep solitary waves. Physics of Fluids. 2025; 37(9):097173. https://doi.org/10.1063/5.0287404 
 
