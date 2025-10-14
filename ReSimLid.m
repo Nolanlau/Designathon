@@ -1,153 +1,208 @@
-clear all
+function out = ReSimLid(mode, arg2, arg3, arg4, arg5, varargin)
+% NewReSim_external  Two mode helper for App Designer
+% Usage:
+%   data = NewReSim_external('compute', Re, nx, ny, xe, ye, Utop, endTime)
+%       Runs the solver once and returns a struct 'data' containing grids
+%       and fields required for plotting.
+%
+%   NewReSim_external('plot', data, plotChoice, axContour, axStream)
+%       Plots from the supplied data struct without recomputing.
+%
+% Notes:
+%   Viscosity chosen as mu = rho * Utop * L / Re.
+%   The function expects helper routines on path:
+%     boundaryConditions, intermediateVelocity, pressureSolve, accel,
+%     calcDiv, maxDiv
 
-
-Re=700; %10 to 700
-
-
-
-
-
-
-
-xe = 1.0; % Domain length in x
-ye = 1.0; % Domain length in y
-
-nx = 32; % Number of cells in x
-ny = 32; % Number of cells in y
-
-dx = xe/nx; % Cell size x
-dy = ye/ny; % Cell size y
-
-x = repmat(dx/2:dx:xe-dx/2,ny,1); % Cell centered x location
-y = repmat(dy/2:dy:ye-dy/2,nx,1)'; % Cell centered y location
-
-%% Fluid properties
-
-
-u = zeros(ny+2,nx+2); % Face centered u velocity(to the left face)
-v = zeros(ny+2,nx+2); % Face centered v velocity(to the bottom face)
-p = zeros(ny+2,nx+2); % Cell centered pressure
-div = zeros(ny+2,nx+2); % Cell centered divergence
-
-u_old = zeros(ny+2,nx+2);
-v_old = zeros(ny+2,nx+2);
-
-initialVelocity = 1.0; % Top wall u velocity
-rho = 1.0; % Fluid density
-mu=rho*initialVelocity*xe/Re;
-nu = mu/rho; % Fluid kinematic viscosity
-
-dt = min(0.25*dx*dx/nu,4.0*nu/initialVelocity/initialVelocity); % Time step(linear advection diffusion stability condition)
-
-twfin = 100 * dt; % Stopping criteria for simulation
-
-%% Real grid boundary conditions
-
-% Parallel to wall
-ut = initialVelocity; % Top wall 
-ub = 0.0; % Bottom wall
-vl = 0.0; % Left wall
-vr = 0.0; % Right wall
-
-% Perpendicular to wall(Not implemented - requires a different BC
-% function,where outlet velocity is solved for,and slip or no slip
-% conditions are used on the other walls)
-%(A possible next direction for flow over a step or two-phase flow)
-ul = 0.0;
-ur = 0.0;
-vt = 0.0;
-vb = 0.0;
-
-
-
-%% Main loop
-
-t = 0; % Start time for simulation
-realTime = 0;
-endTime = 8;
-
-iter = endTime/dt;
-while t < iter
-    [u,v,u_old,v_old] = boundaryConditions(u,v,u_old,v_old,ut,ub,ul,ur,vt,vb,vl,vr,nx,ny); % Set boundary conditions
-    
-    % [dt] = stabilityCondition(u,v,nx,ny,dx);
-
-    [u,v] = intermediateVelocity(u,v,u_old,v_old,rho,mu,nx,ny,dx,dy,dt); % Solve for intermediate velocity condition
-    [p,a_p] = pressureSolve(u,v,rho,nx,ny,dx,dy,dt,t); % Pressure iterative solver
-    [u,v,u_old,v_old] = accel(p,u,v,rho,nx,ny,dx,dy,dt); % Advance time step
-    
-    t = t + 1;
-    realTime = realTime + dt;
-end
-%% Post processing
-
-U = zeros(ny,nx);
-V = zeros(ny,nx);
-velMag = zeros(ny,nx);
-
-% Interpolate my cell centered U and V velocites
-for i=1:nx
-    for j=1:ny
-        U(j,i) = 0.5 *(u(j+1,i+1) + u(j+1,i+2));
-        V(j,i) = 0.5 *(v(j+1,i+1) + v(j+2,i+1));
-        P(j,i) = 0.5 *(p(j+1,i+1) + p(j+2,i+1));
-        velMag(j,i) = sqrt(U(j,i)^2 + V(j,i)^2);
-    end
+if nargin < 2
+    error('NewReSim_external:Insufficient arguments.');
 end
 
-% Calculate divergence and find max
-[div] = calcDiv(div,u,v,nx,ny,dx,dy);
-[m,ii,jj] = maxDiv(div,nx,ny);
+switch lower(string(mode))
+    case 'compute'
+        Re = arg2;
+        % Optional parameters with conservative defaults
+        if nargin >= 3 && ~isempty(arg3), nx = arg3; else nx = 32; end
+        if nargin >= 4 && ~isempty(arg4), ny = arg4; else ny = 32; end
+        if nargin >= 5 && ~isempty(arg5), xe = arg5; else xe = 1.0; end
+        if numel(varargin) >= 1 && ~isempty(varargin{1}), ye = varargin{1}; else ye = 1.0; end
+        if numel(varargin) >= 2 && ~isempty(varargin{2}), Utop = varargin{2}; else Utop = 1.0; end
+        if numel(varargin) >= 3 && ~isempty(varargin{3}), endTime = varargin{3}; else endTime = 8.0; end
 
-% Plotting velocity vectors
-figure()
-subplot(1,2,1)
+        % Derived quantities
+        dx = xe / nx; dy = ye / ny;
+        xc = linspace(dx/2, xe-dx/2, nx);
+        yc = linspace(dy/2, ye-dy/2, ny);
+        [Xc, Yc] = meshgrid(xc, yc);
+
+        % Allocate fields with ghost cells
+        u = zeros(ny+2, nx+2);
+        v = zeros(ny+2, nx+2);
+        p = zeros(ny+2, nx+2);
+        div = zeros(ny+2, nx+2);
+        u_old = zeros(ny+2, nx+2);
+        v_old = zeros(ny+2, nx+2);
+
+        rho = 1.0;
+        mu = rho * Utop * xe / Re; % mu = rho U L / Re
+        nu = mu / rho;
+
+        % Time step heuristic
+        dt = min(0.25 * dx * dx / nu, 4.0 * nu / (Utop^2));
+        iter = ceil(endTime / dt);
+
+        % Boundary values
+        ut = Utop; ub = 0.0; vl = 0.0; vr = 0.0;
+        ul = 0.0; ur = 0.0; vt = 0.0; vb = 0.0;
+
+        % Time integration loop
+        for it = 1:iter
+            % The calls below must exist on the MATLAB path with the shown signatures
+            [u,v,u_old,v_old] = boundaryConditions(u,v,u_old,v_old,ut,ub,ul,ur,vt,vb,vl,vr,nx,ny);
+            [u,v] = intermediateVelocity(u,v,u_old,v_old,rho,mu,nx,ny,dx,dy,dt);
+            [p,a_p] = pressureSolve(u,v,rho,nx,ny,dx,dy,dt,it);
+            [u,v,u_old,v_old] = accel(p,u,v,rho,nx,ny,dx,dy,dt);
+        end
+
+        % Interpolate to cell centres
+        U = zeros(ny, nx); V = zeros(ny, nx); P = zeros(ny, nx); velMag = zeros(ny, nx);
+        for i = 1:nx
+            for j = 1:ny
+                U(j,i) = 0.5 * ( u(j+1,i+1) + u(j+1,i+2) );
+                V(j,i) = 0.5 * ( v(j+1,i+1) + v(j+2,i+1) );
+                P(j,i) = 0.5 * ( p(j+1,i+1) + p(j+2,i+1) );
+                velMag(j,i) = sqrt( U(j,i)^2 + V(j,i)^2 );
+            end
+        end
+
+        % Divergence diagnostic (try, but do not fail the whole compute if absent)
+        try
+            div = calcDiv(div,u,v,nx,ny,dx,dy);
+            [mval, ii, jj] = maxDiv(div,nx,ny);
+        catch
+            mval = NaN; ii = NaN; jj = NaN;
+        end
+
+        % Pack and return
+        out = struct();
+        out.Re = Re;
+        out.params = struct('nx',nx,'ny',ny,'xe',xe,'ye',ye,'dx',dx,'dy',dy,'Utop',Utop,'dt',dt,'iter',iter);
+        out.grid = struct('xc',xc,'yc',yc,'Xc',Xc,'Yc',Yc);
+        out.fields = struct('U',U,'V',V,'P',P,'velMag',velMag,'pFace',p,'uFace',u,'vFace',v);
+        out.divergence = div;
+        out.divMax = struct('value',mval,'i',ii,'j',jj);
+        return
+
+    case 'plot'
+        % arg2 must be data struct
+        data = arg2;
+        if nargin < 5
+            error('NewReSim_external:Plot requires data, plotChoice, axContour and axStream.');
+        end
+        plotChoice = string(arg3);
+        axContour = arg4;
+        axStream = arg5;
+
+        % Validate data quickly
+        if ~isstruct(data) || ~isfield(data,'fields')
+            error('NewReSim_external:Invalid data struct provided to plot mode.');
+        end
+
+        % Extract
+        xc = data.grid.xc;
+        yc = data.grid.yc;
+        Xc = data.grid.Xc;
+        Yc = data.grid.Yc;
+        U = data.fields.U;
+        V = data.fields.V;
+        P = data.fields.P;
+        velMag = data.fields.velMag;
+        xe = data.params.xe;
+        ye = data.params.ye;
+
+        % Select plot data
+        switch lower(plotChoice)
+            case 'pressure'
+                plotData = P; cbLabel = 'Pressure';
+            case 'horizontal velocity'
+                plotData = U; cbLabel = 'Horizontal velocity';
+            case 'vertical velocity'
+                plotData = V; cbLabel = 'Vertical velocity';
+            case 'total velocity'
+                plotData = velMag; cbLabel = 'Velocity magnitude';
+            otherwise
+                plotData = U; cbLabel = 'Horizontal velocity';
+        end
+  
+        % Contour axis
+        if isempty(axContour) || ~isvalid(axContour)
+            axContour = gca;
+        end
+        cla(axContour);
+        hold(axContour,'off');
+        contourLevels = 50;
+        contourf(axContour, Xc, Yc, plotData, contourLevels, 'LineStyle', 'none');
+        box(axContour,'on');
+        xlabel(axContour,'x');
+        % Ensure ylabel not rotated
+        yl = ylabel(axContour,'y');
+        try
+            set(yl,'Rotation',0);
+        catch
+            % older MATLAB versions may ignore; continue
+        end
+        xlim(axContour,[0 xe]);
+        ylim(axContour,[0 ye]);
+        pbaspect(axContour,[1 1 1]);
+        cb = colorbar(axContour);
+        cb.Label.String = cbLabel;
+        try
+            set(cb,'Rotation',0);
+        catch
+            % older MATLAB versions may ignore; continue
+        end
 
 
-contourLevels = 50; % increase this number for smoother contours
-xx = linspace(0, xe, nx);
-yy = linspace(0, ye, ny);
+        colormap(axContour,'jet');
+        if all(isfinite(plotData(:)))
+            caxis(axContour,[min(plotData(:)), max(plotData(:))]);
+        end
 
+        % Streamline axis
+        if isempty(axStream) || ~isvalid(axStream)
+            axStream = gca;
+        end
+        cla(axStream);
+        hold(axStream,'on');
+        box(axStream,'on');
+ 
+        for k = 1:1
+           
+            
+                streamslice(axStream, xc,yc,U,V);
+          
+        end
 
+        xlabel(axStream,'x');
+        yl2 = ylabel(axStream,'y');
+        try
+            set(yl2,'Rotation',0);
+        catch
+        end
+        % Deliberately omit title
+        xlim(axStream,[0 xe]);
+        ylim(axStream,[0 ye]);
+        pbaspect(axStream,[1 1 1]);
+        hold(axStream,'off');
 
-plot=U;
+        % Plot mode returns nothing
+        out = [];
+        return
 
-
-
-% Create filled contour plot
-contourf(xx, yy, plot, contourLevels, 'LineStyle', 'none'); 
-box on
-xlabel('x')
-ylabel('y')
-xlim([0 xe])
-ylim([0 max(y(:))]) % ensure y-limits are covered
-pbaspect([1 1 1])
-% Add colour bar
-cb = colorbar;
-cb.Label.String = 'u_x'; % label for colour bar
-
-
-% Ensure full coverage of colour range
-colormap('jet')
-caxis([min(plot(:)) max(plot(:))]) % ensure colour covers full data range
-
-
-% Plotting stream particles
-subplot(1,2,2)
-[verts,averts] = streamslice(x,y,U,V);
-streamline([verts averts])
-title('Stream Particles')
-xlabel('X-coordinate(m)')
-ylabel('Y-coordinate(m)')
-
-
-set(gcf,'Position',[100 100 1000 350])
-
-
-
-
-
-
+    otherwise
+        error('NewReSim_external:Unknown mode. Use ''compute'' or ''plot''.');
+end
+end
 
 
 
@@ -158,14 +213,6 @@ set(gcf,'Position',[100 100 1000 350])
 
 
 
-
-
-
-
-
-
-
-%% Functions
 
 function dt = stabilityCondition(u,v,nx,ny,dx)
     maxVelMag = 0.0;
@@ -292,10 +339,7 @@ function [p,a_p] = sor(u,v,rho,nx,ny,dx,dy,dt,iter)
         end
     end
     
-    % Write convergence data
-    fileID = fopen('pressureSolverConvergenceData.txt','a+');
-    fprintf(fileID,'%4d            %10d          %4d\n',iter,maxError,counter);
-    fclose(fileID);
+ 
 end
 
 function [u,v,u_old,v_old] = accel(p,u,v,rho,nx,ny,dx,dy,dt)
@@ -319,6 +363,8 @@ function [u,v,u_old,v_old] = accel(p,u,v,rho,nx,ny,dx,dy,dt)
     u_old = u;
     v_old = v;
 end
+
+
 %% Utility functions
 
 function [div] = calcDiv(div,u,v,nx,ny,dx,dy)
