@@ -1,324 +1,242 @@
-clear all
+function out = ReSimStep(mode, varargin)
 
-%
-Re=100; %10 to 100
-scale=0.8;
+switch lower(mode)
+    case 'compute'
+        % ---------- INPUTS ----------
+        Re        = varargin{1};       % Reynolds number
+        stepW_rel = varargin{2};       % step width   (0..1 of domain)
+        stepH_rel = varargin{3};       % step height  (0..1 of domain)
 
+        % ---------- DOMAIN / GRID ----------
+        xe = 1.0; ye = 1.0;            % domain size
+        nx = 40; ny = 40;              % cells
+        dx = xe/nx; dy = ye/ny;
 
+        % obstacle (backward-facing step) dimensions
+        obsWidth  = max(0,min(xe, stepW_rel*xe));
+        obsHeight = max(0,min(ye, stepH_rel*ye));
 
+        % cell-centered coordinates (for plots)
+        xcc = repmat(dx/2:dx:xe-dx/2, ny, 1);
+        ycc = repmat(dy/2:dy:ye-dy/2, nx, 1)';
 
-xe = 1.0; % Domain length in x
-ye = 1.0; % Domain length in y
-obsWidth=scale*xe;
-obsHeight=scale*ye;
+        % ---------- PHYSICALS ----------
+        initialVelocity = 1.0; % top-wall speed (sets scale)
+        rho = 1.0;
+        mu  = rho*initialVelocity*xe/Re;
+        nu  = mu/rho;
 
-nx = 40; % Number of cells in x
-ny = 40; % Number of cells in y
+        % ---------- FIELDS (staggered) ----------
+        u = zeros(ny+2,nx+2); v = zeros(ny+2,nx+2); p = zeros(ny+2,nx+2);
+        u_old = u; v_old = v;
 
-dx = xe/nx; % Cell size x
-dy = ye/ny; % Cell size y
+        % ---------- TIME STEP ----------
+        dt = min(0.25*dx*dx/nu, 4.0*nu/(initialVelocity^2));
+        endTime = 4;
+        iters = max(1, ceil(endTime/dt));
+        t = 0;
 
-x = repmat(dx/2:dx:xe-dx/2,ny,1); % Cell centered x location
-y = repmat(dy/2:dy:ye-dy/2,nx,1)'; % Cell centered y location
+        % ---------- WALL BC VALUES ----------
+        ut = 0; ub = 0; vl = 0; vr = 0;
+        ul = initialVelocity; ur = 0; vt = 0; vb = 0;
 
-initialVelocity = 1.0; % Top wall u velocity
-rho = 1.0; % Fluid density
-mu=rho*initialVelocity*xe/Re;
-nu = mu/rho; % Fluid kinematic viscosity
+        % ---------- MAIN LOOP ----------
+        for k = 1:iters
+            [u,v,u_old,v_old] = boundaryConditions(u,v,u_old,v_old,ut,ub,ul,ur,vt,vb,vl,vr,nx,ny);
+            [u,v] = obstacleVelocity(u,v,obsWidth,obsHeight,nx,ny,dx,dy);
+            [u,v] = intermediateVelocity(u,v,u_old,v_old,rho,mu,nx,ny,dx,dy,dt);
+            [u,v] = obstacleVelocity(u,v,obsWidth,obsHeight,nx,ny,dx,dy);
+            [p,~] = pressureSolve(u,v,obsWidth,obsHeight,rho,nx,ny,dx,dy,dt,k);
+            [u,v,u_old,v_old] = accel(p,u,v,rho,nx,ny,dx,dy,dt);
+            [u,v] = obstacleVelocity(u,v,obsWidth,obsHeight,nx,ny,dx,dy);
+            t = t + dt; 
+        end
 
-u = zeros(ny+2,nx+2); % Face centered u velocity(to the left face)
-v = zeros(ny+2,nx+2); % Face centered v velocity(to the bottom face)
-p = zeros(ny+2,nx+2); % Cell centered pressure
-div = zeros(ny+2,nx+2); % Cell centered divergence
+        % ---------- INTERPOLATE TO CELL CENTERS ----------
+        U = zeros(ny,nx); V = zeros(ny,nx); P = zeros(ny,nx); velMag = zeros(ny,nx);
+        for i = 1:nx
+            for j = 1:ny
+                U(j,i) = 0.5*(u(j+1,i+1) + u(j+1,i+2));
+                V(j,i) = 0.5*(v(j+1,i+1) + v(j+2,i+1));
+                P(j,i) = 0.5*(p(j+1,i+1) + p(j+2,i+1));
+                velMag(j,i) = hypot(U(j,i), V(j,i));
+            end
+        end
 
-u_old = zeros(ny+2,nx+2);
-v_old = zeros(ny+2,nx+2);
+        % divergence (diagnostic)
+        div = calcDiv(zeros(ny+2,nx+2), u, v, nx, ny, dx, dy); 
 
-dt = min(0.25*dx*dx/nu,4.0*nu/initialVelocity/initialVelocity); % Time step(linear advection diffusion stability condition)
+        % ---------- OUTPUT ----------
+        data.x = xcc; data.y = ycc;
+        data.U = U; data.V = V; data.P = P; data.Vel = velMag;
+        data.xe = xe; data.ye = ye; data.nx = nx; data.ny = ny;
+        data.dx = dx; data.dy = dy;
+        data.obsWidth = obsWidth; data.obsHeight = obsHeight;
+        data.stepW_rel = stepW_rel; data.stepH_rel = stepH_rel;
+        data.Re = Re; data.mu = mu; data.nu = nu;
+        out = data;
 
-twfin = 1000 * dt; % Stopping criteria for simulation
+    case 'plot'
+        % ---------- INPUTS ----------
+        data     = varargin{1};
+        fieldStr = lower(string(varargin{2}));
+        axHeat   = varargin{3};  % UIAxes_3
+        axStream = varargin{4};  % UIAxes2_2
 
-% Real grid boundary conditions
+        % ---------- SELECT FIELD ----------
+        switch fieldStr
+            case {'pressure','p'}
+                Z = data.P; cbarLabel = 'Pressure';
+            case {'horizontal velocity','u','u_x','ux'}
+                Z = data.U; cbarLabel = 'Horizontal Velocity';
+            case {'vertical velocity','v','u_y','uy'}
+                Z = data.V; cbarLabel = 'Vertical Velocity';
+            case {'absolute velocity','total velocity','|u|','magnitude'}
+                Z = data.Vel; cbarLabel = 'Absolute Velocity';
+        end
 
-% Parallel to wall
-ut = 0; % Top wall 
-ub = 0.0; % Bottom wall
-vl = 0.0; % Left wall
-vr = 0.0; % Right wall
+        % ---------- HEAT MAP ----------
+        cla(axHeat); hold(axHeat, 'on');
+        contourLevels = 50;
+        xx = linspace(0, data.xe, data.nx);
+        yy = linspace(0, data.ye, data.ny);
+        contourf(axHeat, xx, yy, Z, contourLevels, 'LineStyle', 'none');
+        rectangle(axHeat, 'Position', [0 0 data.obsWidth data.obsHeight], ...
+            'FaceColor', [0 0.5 0.5], 'EdgeColor', 'none');
+        box(axHeat, 'on');
+        xlabel(axHeat, 'x'); ylabel(axHeat, 'y','Rotation',0);
+        xlim(axHeat, [0 data.xe]); ylim(axHeat, [0 data.ye]);
+        pbaspect(axHeat, [1 1 1]);
+        colormap(axHeat, 'jet');
+        caxis(axHeat, [min(Z(:)) max(Z(:))]);
+        cb = colorbar(axHeat);
+        cb.Label.String = cbarLabel;
+        hold(axHeat, 'off');
 
-% Perpendicular to wall(Not implemented - requires a different BC
-% function,where outlet velocity is solved for,and slip or no slip
-% conditions are used on the other walls)
-%(A possible next direction for flow over a step or two-phase flow)
-ul = initialVelocity;
-ur = 0.0;
-vt = 0.0;
-vb = 0.0;
+        % ---------- STREAMLINES ----------
+        cla(axStream); hold(axStream, 'on');
+        % Use streamslice for responsive UI (no blocking seed selection)
+        streamslice(axStream, data.x, data.y, data.U, data.V);
+        rectangle(axStream, 'Position', [0 0 data.obsWidth data.obsHeight], ...
+            'FaceColor', [0 0.5 0.5], 'EdgeColor', 'none');
+        box(axStream, 'on');
+        xlabel(axStream, 'x'); ylabel(axStream, 'y','Rotation',0);
+        xlim(axStream, [0 data.xe]); ylim(axStream, [0 data.ye]);
+        pbaspect(axStream, [1 1 1]);
+        hold(axStream, 'off');
 
+        out = []; % no data return in plot mode
 
-% Main loop
-
-t = 0; % Start time for simulation
-realTime = 0;
-endTime = 8;
-iter = endTime/dt;
-while t < iter
-    [u,v,u_old,v_old] = boundaryConditions(u,v,u_old,v_old,ut,ub,ul,ur,vt,vb,vl,vr,nx,ny); % Set boundary conditions
-  
-    [u,v] = obstacleVelocity(u,v,obsWidth,obsHeight,nx,ny,dx,dy);
-    [u,v] = intermediateVelocity(u,v,u_old,v_old,rho,mu,nx,ny,dx,dy,dt); % Solve for intermediate velocity condition
-    [u,v] = obstacleVelocity(u,v,obsWidth,obsHeight,nx,ny,dx,dy);
-
-    [p,a_p] = pressureSolve(u,v,obsWidth,obsHeight,rho,nx,ny,dx,dy,dt,t); % Pressure iterative solver
-    [u,v,u_old,v_old] = accel(p,u,v,rho,nx,ny,dx,dy,dt); % Advance time step
-    [u,v] = obstacleVelocity(u,v,obsWidth,obsHeight,nx,ny,dx,dy);
-    
-    t = t + 1;
-    realTime = realTime + dt;
+    otherwise
+        error('Mode must be "compute" or "plot".');
 end
-% Post processing
 
-U = zeros(ny,nx);
-V = zeros(ny,nx);
-velMag = zeros(ny,nx);
-
-% Interpolate my cell centered U and V velocites
-for i=1:nx
-    for j=1:ny
-        U(j,i) = 0.5 *(u(j+1,i+1) + u(j+1,i+2));
-        V(j,i) = 0.5 *(v(j+1,i+1) + v(j+2,i+1));
-        P(j,i) = 0.5 *(p(j+1,i+1) + p(j+2,i+1));
-        velMag(j,i) = sqrt(U(j,i)^2 + V(j,i)^2);
-    end
-end
-
-% Calculate divergence and find max
-div = calcDiv(div,u,v,nx,ny,dx,dy);
-[m,ii,jj] = maxDiv(div,nx,ny);
-
-%%
-% Plotting velocity vectors
-figure()
-subplot(1,2,1)
-
-
-contourLevels = 50; % increase this number for smoother contours
-xx = linspace(0, xe, nx);
-yy = linspace(0, ye, ny);
-
-
-
-plot=P;
-
-
-
-% Create filled contour plot
-contourf(xx, yy, plot, contourLevels, 'LineStyle', 'none'); 
-box on
-xlabel('x')
-ylabel('y')
-xlim([0 xe])
-ylim([0 max(y(:))]) % ensure y-limits are covered
-pbaspect([1 1 1])
-% Add colour bar
-cb = colorbar;
-cb.Label.String = 'u_x'; % label for colour bar
-
-
-% Ensure full coverage of colour range
-colormap('jet')
-caxis([min(plot(:)) max(plot(:))]) % ensure colour covers full data range
-
-% Draw rectangle for obstacle
-hold on
-rectangle('Position', [0 0 obsWidth obsHeight], 'FaceColor', [0 0.5 0.5], 'EdgeColor', 'none')
-hold off
-
-
-% Plotting stream particles
-subplot(1,2,2)
-[verts,averts] = streamslice(x,y,U,V)
-box on
-streamline([verts averts])
-pbaspect([1 1 1])
-xlabel('x')
-ylabel('y')
-rectangle('Position',[0 0 obsWidth obsHeight],'FaceColor',[0 .5 .5])
-
-
-set(gcf,'Position',[100 100 1000 350])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-% Functions
+% ====================== SUBFUNCTIONS ======================
 
 function [u,v] = obstacleVelocity(u,v,obsWidth,obsHeight,nx,ny,dx,dy)
+    obsI = max(0, min(nx, floor(obsWidth/dx)));
+    obsJ = max(0, min(ny, floor(obsHeight/dy)));
 
-    obsI = obsWidth/dx;
-    obsJ = obsHeight/dy;
-
-    % Set velocity inside the obstacle = 0. Ensure U is divergence free.
-    for i=1:obsI+2
-        for j=1:obsJ+1
+    % zero velocity in obstacle region (staggered correction)
+    for i = 1:obsI+2
+        for j = 1:obsJ+1
             u(j,i) = 0.0;
         end
     end
-
-    for i=1:obsI+1
-        for j=1:obsJ+2
+    for i = 1:obsI+1
+        for j = 1:obsJ+2
             v(j,i) = 0.0;
         end
     end
 
-    % Apply velocity boundary conditions to the obstacle
-    for i=3:obsI+1
+    % mirror conditions on the obstacle "walls"
+    for i = 3:obsI+1
         u(obsJ+1,i) = -u(obsJ+2,i);
     end
-
-    for j=3:obsJ+1
+    for j = 3:obsJ+1
         v(j,obsI+1) = -v(j,obsI+2);
     end
 end
 
-function  [a_e,a_w,a_n,a_s,u,v] = obstaclePressure(a_e,a_w,a_n,a_s,u,v,obsWidth,obsHeight,nx,ny,dx,dy)
-
-    obsI = obsWidth/dx;
-    obsJ = obsHeight/dy;
-
-    % Set pressure coefficients along the wall
+function  [a_e,a_w,a_n,a_s,u,v] = obstaclePressure(a_e,a_w,a_n,a_s,u,v,obsWidth,obsHeight,nx,ny,dx,dy) %#ok<INUSD>
+    obsI = max(0, min(nx, floor(obsWidth/dx)));
+    obsJ = max(0, min(ny, floor(obsHeight/dy)));
     a_s(obsJ+2,2:obsI+1) = 0.0;
     a_w(2:obsJ+1,obsI+2) = 0.0;
 end
 
-function dt = stabilityCondition(u,v,nx,ny,dx)
-    maxVelMag = 0.0;
-    for i=1:nx+2
-        for j=1:ny+2
-            velMag = sqrt(u(j,i)^2 + v(j,i)^2);
-            if(velMag > maxVelMag)
-                maxVelMag = velMag;
-            end
-        end
-    end
-
-    dt = 0.3*dx/maxVelMag; % CFL stability condition
-end
-
 function [u,v,u_old,v_old] = boundaryConditions(u,v,u_old,v_old,ut,ub,ul,ur,vt,vb,vl,vr,nx,ny)
-    u_old(:,2) = ul; % Left wall
-    u_old(:,nx+2) = u_old(:,nx+1); % Right wall
-    u_old(ny+2,:) = 2*ut + u_old(ny+1,:); % Top wall
-    u_old(1,:) = 2*ub - u_old(2,:); % Bottom wall
+    u_old(:,2)     = ul;                  % left inflow (no-penetration via v BC)
+    u_old(:,nx+2)  = u_old(:,nx+1);       % right Neumann
+    u_old(ny+2,:)  = 2*ut + u_old(ny+1,:);% top
+    u_old(1,:)     = 2*ub - u_old(2,:);   % bottom
 
-    v_old(ny+2,:) = vt; % Top wall
-    v_old(2,:) = vb; % Bottom wall
-    v_old(:,1) = 2.0*vl - v_old(:,2); % Left wall
-    v_old(:,nx+2) = 2.0*vr - v_old(:,nx+1); % Right wall;
+    v_old(ny+2,:)  = vt;                  % top
+    v_old(2,:)     = vb;                  % bottom
+    v_old(:,1)     = 2.0*vl - v_old(:,2); % left
+    v_old(:,nx+2)  = 2.0*vr - v_old(:,nx+1); % right
 
-    u = u_old;
-    v = v_old;
+    u = u_old; v = v_old;
 end
 
 function [u,v] = intermediateVelocity(u,v,u_old,v_old,rho,mu,nx,ny,dx,dy,dt)
-    for i=3:nx+1
-        for j=2:ny+1
-            % Interpolating velocities
+    % u-momentum (u is face-centered on vertical cell faces)
+    for i = 3:nx+1
+        for j = 2:ny+1
             u_e = 0.5*(u_old(j,i) + u_old(j,i+1));
             u_w = 0.5*(u_old(j,i-1) + u_old(j,i));
             u_n = 0.5*(u_old(j,i) + u_old(j+1,i));
             u_s = 0.5*(u_old(j,i) + u_old(j-1,i));
-            
             v_n = 0.5*(v_old(j+1,i-1) + v_old(j+1,i));
             v_s = 0.5*(v_old(j,i-1) + v_old(j,i));
-            
-            % Solving div(rho*u*u) and div(tau) 
             convection = -(rho*u_e*u_e - rho*u_w*u_w)/dx -(rho*v_n*u_n - rho*v_s*u_s)/dy;
-            diffusion = mu*(u_old(j,i-1) - 2.0*u_old(j,i) + u_old(j,i+1))/dx/dx + mu*(u_old(j+1,i) - 2.0*u_old(j,i) + u_old(j-1,i))/dy/dy;
-            
-            % Calculate intermediate u velocity
-            u(j,i) = rho*u_old(j,i) + dt*(diffusion + convection);
-            u(j,i) = u(j,i)/rho;
+            diffusion  =  mu*(u_old(j,i-1) - 2.0*u_old(j,i) + u_old(j,i+1))/dx/dx ...
+                        +  mu*(u_old(j+1,i) - 2.0*u_old(j,i) + u_old(j-1,i))/dy/dy;
+            u(j,i) = (rho*u_old(j,i) + dt*(diffusion + convection))/rho;
         end
     end
 
-    for i=2:nx+1
-        for j=3:ny+1
-            % Interpolating velocities
+    % v-momentum (v is face-centered on horizontal cell faces)
+    for i = 2:nx+1
+        for j = 3:ny+1
             v_e = 0.5*(v_old(j,i) + v_old(j,i+1));
             v_w = 0.5*(v_old(j,i) + v_old(j,i-1));
             v_n = 0.5*(v_old(j,i) + v_old(j+1,i));
             v_s = 0.5*(v_old(j,i) + v_old(j-1,i));
-
             u_e = 0.5*(u_old(j-1,i+1) + u_old(j,i+1));
             u_w = 0.5*(u_old(j-1,i) + u_old(j,i));
-
-            % Solving div(rho*u*u) and div(tau)
             convection = -(rho*v_e*u_e - rho*v_w*u_w)/dx -(rho*v_n*v_n - rho*v_s*v_s)/dy;
-            diffusion = mu*(v_old(j,i-1) - 2*v_old(j,i) + v_old(j,i+1))/dx/dx + mu*(v_old(j+1,i) - 2*v_old(j,i) + v_old(j-1,i))/dy/dy;
-            
-            % Calculate intermediate v velocity
-            v(j,i) = rho*v_old(j,i) + dt*(diffusion + convection);
-            v(j,i) = v(j,i)/rho;
+            diffusion  =  mu*(v_old(j,i-1) - 2*v_old(j,i) + v_old(j,i+1))/dx/dx ...
+                        +  mu*(v_old(j+1,i) - 2*v_old(j,i) + v_old(j-1,i))/dy/dy; 
+            diffusion  =  mu*(v_old(j,i-1) - 2*v_old(j,i) + v_old(j,i+1))/dx/dx ...
+                        +  mu*(v_old(j+1,i) - 2*v_old(j,i) + v_old(j-1,i))/dy/dy;
+            v(j,i) = (rho*v_old(j,i) + dt*(diffusion + convection))/rho;
         end
     end
 end
 
-function [p,a_p] = pressureSolve(u,v,obsWidth,obsHeight,rho,nx,ny,dx,dy,dt,iter)
-    [p,a_p] = pressureOptimized(u,v,rho,nx,ny,dx,dy,dt,iter); % only works for square matrix atm
-    % [p,a_p] = sor(u,v,obsWidth,obsHeight,rho,nx,ny,dx,dy,dt,iter);
+function [p,a_p] = pressureSolve(u,v,obsWidth,obsHeight,rho,nx,ny,dx,dy,dt,iter) %#ok<INUSD>
+    [p,a_p] = pressureOptimized(u,v,rho,nx,ny,dx,dy,dt,iter);
+    % alt: [p,a_p] = sor(u,v,obsWidth,obsHeight,rho,nx,ny,dx,dy,dt,iter);
 end
 
-function [p,a_p] = pressureOptimized(u,v,rho,nx,ny,dx,dy,dt,iter)
+function [p,a_p] = pressureOptimized(u,v,rho,nx,ny,dx,dy,dt,iter) %#ok<INUSD>
     p = zeros(ny+2,nx+2);
-
+    rhs = zeros(ny+2,nx+2);
     for i=2:nx+1
         for j=2:ny+1
-            rhs(j,i) =((u(j,i+1) - u(j,i))/dx +(v(j+1,i) - v(j,i))/dy)/dt;
+            rhs(j,i) = ((u(j,i+1)-u(j,i))/dx + (v(j+1,i)-v(j,i))/dy)/dt;
         end
     end
-    
-    % Block matrices
-    e = ones(nx,1);
-    Ax = spdiags([e -e e],-1:1,nx,nx)/rho/dx/dx;
 
-    e = ones(ny,1);
-    Ay = spdiags([e -e e],-1:1,ny,ny)/rho/dy/dy;
+    % 2D Poisson via Kronecker (Dirichlet-like handling on outer bands)
+    e  = ones(nx,1);
+    Ax = spdiags([e -2*e e], -1:1, nx, nx)/(rho*dx*dx);
+    e  = ones(ny,1);
+    Ay = spdiags([e -2*e e], -1:1, ny, ny)/(rho*dy*dy);
 
-    % Adjusting block matrices to account for boundary conditions
-    e = ones(nx,1);
-    e(1) = 0;
-    e(nx) = 0;
-    
-    Ax2 = spdiags([0*e -e 0*e ],-1:1,nx,nx)/rho/dx/dx;
-    Iy2 = speye(ny);
-    Iy2(2:ny,2:ny) = 0;
-    Iy3 = speye(ny);
-    Iy3(1:ny-1,1:ny-1) = 0;
-
-    e = 2*ones(nx,1);
-    e(1) = 1;
-    e(nx) = 1;
-    Ax3 = spdiags([0*e -e 0*e ],-1:1,nx,nx)/rho/dx/dx;
-    Iy4 = speye(ny);
-    Iy4(1,1) = 0;
-    Iy4(ny,ny) = 0;
-
-    Ix=speye(nx);
-    Iy=speye(ny);
-    
-    % Building Ax = b matrix: A2,x2,b2 linear matrices
-    A2 = kron(Iy,Ax) + kron(Ay,Ix) + kron(Iy2,Ax2) + kron(Iy3,Ax2) + kron(Iy4,Ax3);
+    Ix = speye(nx); Iy = speye(ny);
+    A2 = kron(Iy,Ax) + kron(Ay,Ix);
 
     b = zeros(ny,nx);
     for i=2:nx+1
@@ -326,10 +244,10 @@ function [p,a_p] = pressureOptimized(u,v,rho,nx,ny,dx,dy,dt,iter)
             b(j-1,i-1) = rhs(j,i);
         end
     end
-    b2 = reshape(b,[ny*nx,1]);
-    
-    [x2] = bicgstab(A2,b2);
-    x = reshape(x2,[ny,nx]);
+    b2 = reshape(b, [ny*nx, 1]);
+
+    x2 = bicgstab(A2, b2);
+    x  = reshape(x2,[ny,nx]);
 
     for i=2:nx+1
         for j=2:ny+1
@@ -339,109 +257,52 @@ function [p,a_p] = pressureOptimized(u,v,rho,nx,ny,dx,dy,dt,iter)
     a_p = 1;
 end
 
-function [p,a_p] = sor(u,v,obsWidth,obsHeight,rho,nx,ny,dx,dy,dt,iter)
-    p = zeros(ny+2,nx+2);
-    rhs = zeros(ny+2,nx+2);
-    a_p = zeros(ny+2,nx+2);
-    a_e = ones(ny+2,nx+2)/rho/dx/dx;
-    a_w = ones(ny+2,nx+2)/rho/dx/dx;
-    a_n = ones(ny+2,nx+2)/rho/dy/dy;
-    a_s = ones(ny+2,nx+2)/rho/dy/dy;
+function [p,a_p] = sor(u,v,obsWidth,obsHeight,rho,nx,ny,dx,dy,dt,iter) %#ok<INUSD>
+    p = zeros(ny+2,nx+2); rhs = zeros(ny+2,nx+2);
+    a_e = ones(ny+2,nx+2)/(rho*dx*dx);
+    a_w = ones(ny+2,nx+2)/(rho*dx*dx);
+    a_n = ones(ny+2,nx+2)/(rho*dy*dy);
+    a_s = ones(ny+2,nx+2)/(rho*dy*dy);
 
-    % a_e(:,nx+1) = 0.0;
-    % a_w(:,2) = 0.0;
-    a_n(ny+1,:) = 0.0;
-    a_s(2,:) = 0.0;
-    
-    obsI = obsWidth/dx;
-    obsJ = obsHeight/dy;
-    [a_e,a_w,a_n,a_s,u,v] = obstaclePressure(a_e,a_w,a_n,a_s,u,v,obsWidth,obsHeight,nx,ny,dx,dy);
+    a_n(ny+1,:) = 0.0; a_s(2,:) = 0.0;
+    [a_e,a_w,a_n,a_s,~,~] = obstaclePressure(a_e,a_w,a_n,a_s,u,v,obsWidth,obsHeight,nx,ny,dx,dy);
 
     a_p = -(a_e + a_w + a_n + a_s);
+    TOL = 1e-7; beta = 1.872; maxError = 10;
 
-    maxError = 10;
-    TOL = 1e-7;
-    counter = 0;
-    beta = 1.872;
-
-    while(abs(maxError) > TOL)
-        counter = counter + 1;
+    while abs(maxError) > TOL
         maxError = 0;
-        
-        % Solve for pressure field
         for i=2:nx+1
             for j=2:ny+1
-
-                if(j < obsJ+1 && i < obsI+1)
-                    continue;
-                end
-
-                rhs(j,i) =(u(j,i+1) - u(j,i))/dx +(v(j+1,i) - v(j,i))/dy;
-                rhs(j,i) = rhs(j,i)/dt -(a_w(j,i)*p(j,i-1) + a_e(j,i)*p(j,i+1) + a_n(j,i)*p(j+1,i) + a_s(j,i)*p(j-1,i));
-                p(j,i) = beta*rhs(j,i)/a_p(j,i) +(1-beta)*p(j,i);
-            end
-        end
-        
-        % Determine residuals
-        for i=2:nx+1
-            for j=2:ny+1
-
-                if(j < obsJ+1 && i < obsI+1)
-                    continue;
-                end
-
-                rhs(j,i) =(u(j,i+1) - u(j,i))/dx +(v(j+1,i) - v(j,i))/dy;
-                error = a_w(j,i)*p(j,i-1) + a_e(j,i)*p(j,i+1) + a_n(j,i)*p(j+1,i) + a_s(j,i)*p(j-1,i) + a_p(j,i)*p(j,i) - rhs(j,i)/dt;
-                if(abs(error) > maxError)
-                    maxError = abs(error);
-                end
+                rhs(j,i) = ( (u(j,i+1)-u(j,i))/dx + (v(j+1,i)-v(j,i))/dy )/dt;
+                res = rhs(j,i) - (a_w(j,i)*p(j,i-1) + a_e(j,i)*p(j,i+1) + ...
+                                  a_n(j,i)*p(j+1,i) + a_s(j,i)*p(j-1,i) + a_p(j,i)*p(j,i));
+                p(j,i) = p(j,i) + beta*res/a_p(j,i);
+                maxError = max(maxError, abs(res));
             end
         end
     end
-    
-   
 end
 
 function [u,v,u_old,v_old] = accel(p,u,v,rho,nx,ny,dx,dy,dt)
     for i=3:nx+1
         for j=2:ny+1
-            % Update u velocity
-            u(j,i) = rho*u(j,i) - dt*(p(j,i) - p(j,i-1))/dx;
-
-            u(j,i) = u(j,i) / rho;
+            u(j,i) = (rho*u(j,i) - dt*(p(j,i) - p(j,i-1))/dx)/rho;
         end
     end
-
     for i=2:nx+1
         for j=3:ny+1
-            % Update v velocity
-            v(j,i) = rho*v(j,i) - dt*(p(j,i) - p(j-1,i))/dy;
-
-            v(j,i) = v(j,i) / rho;
+            v(j,i) = (rho*v(j,i) - dt*(p(j,i) - p(j-1,i))/dy)/rho;
         end
     end
-    u_old = u;
-    v_old = v;
+    u_old = u; v_old = v;
 end
-%% Utility functions
 
 function div = calcDiv(div,u,v,nx,ny,dx,dy)
     for i=2:nx-1
         for j=2:ny-1
-            div(j,i) =(u(j,i+1) - u(j,i))/dx +(v(j+1,i) - v(j,i))/dy;
+            div(j,i) = (u(j,i+1)-u(j,i))/dx + (v(j+1,i)-v(j,i))/dy;
         end
     end
 end
-
-function [max,ii,jj] = maxDiv(div,nx,ny)
-    max = 0.0;
-    for i=2:nx-1
-        for j=2:ny-1
-            if(div(j,i) > max)
-                max = div(j,i);
-                ii = i;
-                jj = j;
-            end
-        end
-    end
 end
