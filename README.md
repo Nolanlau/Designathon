@@ -2,7 +2,7 @@
 
 ---
 
-##Intructions For Use
+## Instructions For Use
 
 **If you do not have MATLAB installed**, download *installer_DNEdupack.exe* to install the application and run it.
 
@@ -10,7 +10,7 @@
 
 ---
 
-##Design Philosophy
+## Design Philosophy
 
 This prototype presents a software toolkit that facilitates the learning and appreciation of dimensionless numbers in fluid mechanics through the use of interactive simulations. In our project, wherein we are designing an aerosol extraction system, we find dimensionless numbers such as the Stokes number and the Ohnesorge number indispensable in quantifying distinct flow regimes and predicting aerosol behaviour. Students are first introduced to dimensional analysis in MECH0005: Introduction to Thermodynamics and Fluid Mechanics. However, as they are presented with numerous dimensionless numbers accompanied only by brief explanations of their physical meaning, students often fail to develop a robust intuition or appreciation of their significance.
 
@@ -32,7 +32,7 @@ The simulations resolve the governing equations behind fluid mechanics with an e
 
 ---
 
-##References
+## References
 
 [1] Lau NCK, Klettner CA. Vorticity generation, transport, and annihilation under steep solitary waves. Physics of Fluids. 2025; 37(9):097173. https://doi.org/10.1063/5.0287404 
 
