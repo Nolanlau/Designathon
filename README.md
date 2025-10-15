@@ -1,6 +1,5 @@
 # Dimensionless Number Edupack
 
----
 
 ## Instructions For Use
 
@@ -8,7 +7,6 @@
 
 **If you already have MATLAB installed**, download the whole repository in a *.zip* format and extract it. All the files should be in the same directory. Run *DNEdupack.mlapp* in MATLAB.
 
----
 
 ## Design Philosophy
 
@@ -30,7 +28,6 @@ Students can then proceed to the simulation to observe the effect of the dimensi
 
 The simulations resolve the governing equations behind fluid mechanics with an emphasis on computational speed, thus necessitating the use of reduced order models where appropriate. The simulations were numerically resolved with a combination of public available [2,3] and proprietary code using the Finite Difference Method, Finite Volume Method or the Spectral Method where most appropriate. For the purposes of this edupack, the targeted run speed was on the order of millisecond to seconds to permit interactive or near-real-time visualisation of flow phenomena on standard consumer hardware. Whereas concessions to numerical fidelity have been made, the results of the simulations are still qualitatively accurate in showing the variation across the pertinent dimensionless numbers if not exactly quantitatively accurate. 
 
----
 
 ## References
 
