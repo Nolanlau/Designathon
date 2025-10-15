@@ -2,7 +2,7 @@
 
 **Intructions For Use**
 
-Download the whole repository in a <i>.zip<i> format and extract it. All the files should be in the same directory. Run <i>DNEdupack.mlapp<i> in MATLAB.
+Download the whole repository in a <em>.zip<em> format and extract it. All the files should be in the same directory. Run <em>DNEdupack.mlapp<em> in MATLAB.
 
 **Design Philosophy**
 
@@ -10,23 +10,17 @@ This prototype presents a software toolkit that facilitates the learning and app
 
 This edupack remedies that deficiency by providing interactive simulations and supplementary theoretical reading material [1], thereby enabling students to cultivate both conceptual understanding and practical insight into the governing dimensionless parameters of fluid mechanics.
 
-By opening the edupack, students will be presented with a menu where they can select the dimensionless number which most interests them.
+BBy opening the edupack, students will be presented with a menu where they can select the dimensionless number which most interests them. 
 
-<p align="center">
-  <img src="assets/4c7c02eb-4949-45c6-8945-e2c2ae1cb1e8" alt="menu" width="60%" />
-</p>
+<img width="260" height="260"  alt="image" src="https://github.com/user-attachments/assets/4c7c02eb-4949-45c6-8945-e2c2ae1cb1e8" /> 
 
-Upon selection, they will be given a brief explanation as to the physical meaning of the dimensionless number and what flow physics it encompasses. 
+Upon selection, they will be given a brief explanation as to the physical meaning of the dimensionless number and what flow physics it encompasses.
 
-<p align="center">
-  <img src="assets/fd26b4b9-b7eb-4ae7-8493-b4eb42186965" alt="explanation" width="60%" />
-</p>
+<img width="791" height="591"  alt="image" src="https://github.com/user-attachments/assets/fd26b4b9-b7eb-4ae7-8493-b4eb42186965" />
 
-Students can then proceed to the simulation to observe the effect of the dimensionless number of fluid flow.
+Students can then proceed to the simulation to observe the effect of the dimensionless number of fluid flow. 
 
-<p align="center">
-  <img src="assets/90cb400f-53ff-4e5f-86dd-33d629482342" alt="simulation" width="60%" />
-</p>
+<img width="790" height="595"  alt="image" src="https://github.com/user-attachments/assets/90cb400f-53ff-4e5f-86dd-33d629482342" /> 
 
 The simulations resolve the governing equations behind fluid mechanics with an emphasis on computational speed, thus necessitating the use of reduced order models where appropriate. The simulations were numerically resolved with a combination of public available [2,3] and proprietary code using the Finite Difference Method, Finite Volume Method and the Spectral Method where most appropriate. For the purposes of this edupack, the targeted run speed was on the order of millisecond to seconds to permit interactive or near-real-time visualisation of flow phenomena on standard consumer hardware. Whereas concessions to numerical fidelity have been made, the results of the simulations are still qualitatively accurate in showing the variation across the pertinent dimensionless numbers if not exactly quantitatively accurate. 
 
