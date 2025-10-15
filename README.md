@@ -1,11 +1,31 @@
-# Designathon
-By these presents, We have devised a proto-type of software most ingenious from which the import of the manifold dimensionless numbers oft used in the study of that most scholarly of disciplines, fluid mechanics, can be appreciated. Whereas We bring with glad tidings our undertaking of an endeavour most arduous of the extraction of aerosol from large-scale ink-jet printers, We find our redoubtable advances much embellished by our remembrance of these dimensionless numbers. Forsooth it is with this self-same spirit we wish all nubile scholars to embrace, by which this software shall imbue in them the wisdom they so need. By such means, the cultivation of engineering intuition, indispensable to problem assessment and solution derivation, shall be advanced for the benefit of all learners who shall avail themselves thereof. Whereas We benefitting of the road paved by our venerable forbearers, we commit their works thereof to the highest reverence [1,2,3].
+# Dimensionless Number Edupack
+
+**Introduction**
+This prototype presents a software toolkit that facilitates the learning and appreciation of dimensionless numbers in fluid mechanics through the use of interactive simulations. In our project, wherein we are designing an aerosol extraction system, we find dimensionless numbers such as the Stokes number and the Ohnesorge number indispensable in quantifying distinct flow regimes and predicting aerosol behaviour. Students are first introduced to dimensional analysis in MECH0005: Introduction to Thermodynamics and Fluid Mechanics. However, as they are presented with numerous dimensionless numbers accompanied only by brief explanations of their physical meaning, students often fail to develop a robust intuition or appreciation of their significance.
+
+This edupack remedies that deficiency by providing interactive simulations and supplementary theoretical reading material [1], thereby enabling students to cultivate both conceptual understanding and practical insight into the governing dimensionless parameters of fluid mechanics.
+
+By opening the edupack, students will be presented with a menu where they can select the dimensionless number which most interests them.
+
+<img width="788" height="588" alt="image" src="https://github.com/user-attachments/assets/4c7c02eb-4949-45c6-8945-e2c2ae1cb1e8" />
+
+Upon selection, they will be given a brief explanation as to the physical meaning of the dimensionless number and what flow physics it encompasses. 
+
+<img width="791" height="591" alt="image" src="https://github.com/user-attachments/assets/fd26b4b9-b7eb-4ae7-8493-b4eb42186965" />
+
+Students can then proceed to the simulation to observe the effect of the dimensionless number of fluid flow.
+
+<img width="790" height="595" alt="image" src="https://github.com/user-attachments/assets/90cb400f-53ff-4e5f-86dd-33d629482342" />
+
+The simulations resolve the governing equations behind fluid mechanics with an emphasis on computational speed, thus necessitating the use of reduced order models where appropriate. The simulations were numerically resolved with a combination of public available [2,3] and proprietary code using the Finite Difference Method, Finite Volume Method and the Spectral Method where most appropriate. For the purposes of this edupack, the targeted run speed was on the order of millisecond to seconds to permit interactive or near-real-time visualisation of flow phenomena on standard consumer hardware. Whereas concessions to numerical fidelity have been made, the results of the simulations are still qualitatively accurate in showing the variation across the pertinent dimensionless numbers if not exactly quantitatively accurate. 
 
 **References**
 
-[1] MathWorks-Teaching-Resources. Computational-Fluid-Dynamics [Internet]. 2025 [cited 2025 Oct 13]. Available from: https://github.com/MathWorks-Teaching-Resources/Computational-Fluid-Dynamics/tree/main
+[1] Lau NCK, Klettner CA. Vorticity generation, transport, and annihilation under steep solitary waves. Physics of Fluids. 2025; 37(9):097173. https://doi.org/10.1063/5.0287404 
 
-[2] Ricciardi A.. AndersonCFD_Chapter10_Solution (version 1.0) [Internet]. 2021 [cited 2025 Oct 13]. Available from: https://uk.mathworks.com/matlabcentral/fileexchange/95203-andersoncfd_chapter10_solution
+[2] MathWorks-Teaching-Resources. Computational-Fluid-Dynamics [Internet]. 2025 [cited 2025 Oct 13]. Available from: https://github.com/MathWorks-Teaching-Resources/Computational-Fluid-Dynamics/tree/main
 
-[3] Lau NCK, Klettner CA. Vorticity generation, transport, and annihilation under steep solitary waves. Physics of Fluids. 2025; 37(9):097173. https://doi.org/10.1063/5.0287404 
+[3] Ricciardi A.. AndersonCFD_Chapter10_Solution (version 1.0) [Internet]. 2021 [cited 2025 Oct 13]. Available from: https://uk.mathworks.com/matlabcentral/fileexchange/95203-andersoncfd_chapter10_solution
+
+
 
