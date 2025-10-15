@@ -2,7 +2,7 @@
 
 **Intructions For Use**
 
-Download the whole repository in a <em>.zip<em> format and extract it. All the files should be in the same directory. Run <em>DNEdupack.mlapp<em> in MATLAB.
+Download the whole repository in a .zip format and extract it. All the files should be in the same directory. Run DNEdupack.mlapp in MATLAB.
 
 **Design Philosophy**
 
