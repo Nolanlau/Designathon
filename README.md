@@ -1,4 +1,4 @@
-# Dimensionless Number Edupack
+# Dimensionless Numbers Edupack
 
 
 ## Instructions For Use
